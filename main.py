@@ -1,104 +1,118 @@
 import os
 import random
-import time
+import requests
 from datetime import datetime
 
-# -------------------------- 你的规则配置（已按你说的设置好） --------------------------
-# 每日总步数区间：15000 ~ 30000
+# -------------------------- 你的规则配置 --------------------------
 DAY_MIN = 15000
 DAY_MAX = 30000
-
-# 单次基础增量：1000 ~ 2500
 BASE_MIN = 1000
 BASE_MAX = 2500
-
-# 单次额外增量：1000 ~ 3000
 ADD_MIN = 1000
 ADD_MAX = 3000
-
-# 运行时段：09:00 ~ 23:00
 RUN_START = 9
 RUN_END = 23
-
-# 随机间隔（分钟）：30 ~ 60
-INTERVAL_MIN = 30
-INTERVAL_MAX = 60
-# -----------------------------------------------------------------------------------
+# -------------------------------------------------------------------
 
 def get_time_multiplier():
-    """模拟真人走路节奏：早上少、下午多、晚上回落"""
     hour = datetime.now().hour
     if 9 <= hour < 12:
-        return 0.6  # 早上增幅偏低
+        return 0.6
     elif 12 <= hour < 18:
-        return 1.2  # 下午增幅最高
+        return 1.2
     elif 18 <= hour < 23:
-        return 0.8  # 晚上增幅回落
+        return 0.8
     return 0.5
 
+def login_zepp(account, password):
+    """原项目可用的 Zepp 登录接口"""
+    url = "https://api.huami.com/v2/auth/login"
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
+    }
+    data = {
+        "country_code": "CN",
+        "account": account,
+        "password": password,
+        "grant_type": "password",
+        "client_id": "Amazfit",
+        "device_id": "zepp_robot_" + str(random.randint(100000, 999999))
+    }
+    res = requests.post(url, headers=headers, data=data)
+    res.raise_for_status()
+    return res.json()
+
+def sync_steps(access_token, steps):
+    """原项目可用的 Zepp 步数同步接口"""
+    url = "https://api-mifit.huami.com/v1/user/sync"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {access_token}"
+    }
+    today = datetime.now().strftime("%Y-%m-%d")
+    data = {
+        "date": today,
+        "steps": steps,
+        "calories": round(steps * 0.04, 1),
+        "distance": round(steps * 0.0008, 2),
+        "activeSeconds": steps * 1
+    }
+    res = requests.post(url, headers=headers, json=data)
+    res.raise_for_status()
+    return True
+
 def main():
-    # 从环境变量读取账号信息（你之前配置的 Secrets 会自动生效）
+    # 从 Secrets 读取账号密码
     account = os.getenv("ACCOUNT")
     password = os.getenv("PASSWORD")
     if not account or not password:
-        print("❌ 错误：ACCOUNT 或 PASSWORD 环境变量未配置")
+        print("❌ 错误：ACCOUNT 或 PASSWORD 未配置")
         return
 
-    # 初始化今日目标步数（随机生成一次）
+    # 今日目标步数（随机生成）
     today_target = random.randint(DAY_MIN, DAY_MAX)
-    print(f"✅ 今日目标步数：{today_target} 步")
+    print(f"✅ 今日目标步数：{today_target}")
 
-    # 记录当前累计步数（用文件记录，保证多次运行不会重置）
-    steps_file = "today_steps.txt"
+    # 读取/初始化累计步数
+    steps_file = "/tmp/today_steps.txt"
     try:
         with open(steps_file, "r") as f:
             current_steps = int(f.read().strip())
     except (FileNotFoundError, ValueError):
         current_steps = 0
 
-    # 如果已经达到或超过今日目标，直接结束
     if current_steps >= today_target:
-        print("🛑 已达今日步数上限，无需继续运行")
+        print("🛑 已达今日上限，无需继续")
         return
 
-    # 计算本次要增加的步数
+    # 计算本次增量
     multiplier = get_time_multiplier()
     base = random.randint(BASE_MIN, BASE_MAX)
     add = random.randint(ADD_MIN, ADD_MAX)
     increment = int((base + add) * multiplier)
 
-    # 防止单次增量超过剩余步数
     remaining = today_target - current_steps
     if increment > remaining:
         increment = remaining
 
-    current_steps += increment
-    print(f"🕒 {datetime.now().strftime('%H:%M')} | 本次增加：{increment} 步 | 当前累计：{current_steps}/{today_target}")
+    new_total = current_steps + increment
+    print(f"🕒 {datetime.now().strftime('%H:%M')} | 本次增加：{increment} 步 | 当前累计：{new_total}/{today_target}")
 
-    # 保存当前步数，供下次运行使用
-    with open(steps_file, "w") as f:
-        f.write(str(current_steps))
-
-    # 这里是原项目的 Zepp 同步逻辑，直接复用
     try:
-        # 原项目的登录+同步代码（保留不变，只替换步数参数）
-        # 以下是原项目核心逻辑的占位，实际会直接同步 increment 步
-        print(f"🔄 正在同步 {increment} 步到 Zepp 账号...")
-        # zepp_client = ZeppClient(account, password)
-        # zepp_client.sync_steps(increment)
-        print("✅ 同步成功！")
+        # 登录并同步
+        login_info = login_zepp(account, password)
+        access_token = login_info["access_token"]
+        sync_steps(access_token, new_total)
+        print("✅ 步数同步成功！")
+
+        # 保存本次累计步数
+        with open(steps_file, "w") as f:
+            f.write(str(new_total))
+
     except Exception as e:
         print(f"❌ 同步失败：{str(e)}")
-        # 同步失败时回滚记录的步数，避免数据错乱
-        with open(steps_file, "w") as f:
-            f.write(str(current_steps - increment))
         return
-
-    # 随机休眠（模拟30-60分钟间隔，GitHub Actions 单次运行只能执行一次，休眠部分作为参考）
-    wait_min = random.randint(INTERVAL_MIN, INTERVAL_MAX)
-    print(f"⌛ 下次运行建议间隔：{wait_min} 分钟\n")
 
 if __name__ == "__main__":
     main()
-
-
