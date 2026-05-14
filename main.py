@@ -31,17 +31,17 @@ def get_time_multiplier():
 
 def login_zepp(account, password):
     print("🔐 正在登录 Zepp...")
-    url = "https://api.huami.com/v2/auth/login"
+    # 使用最新可用的登录接口
+    url = "https://account.huami.com/v1/client/app_login"
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
+        "User-Agent": "Zepp/6.0.0 (Android; Scale/2.00)"
     }
     data = {
-        "country_code": "CN",
-        "account": account,
+        "email": account,
         "password": password,
-        "grant_type": "password",
-        "client_id": "Amazfit",
+        "app_name": "com.huami.mifit",
+        "country_code": "CN",
         "device_id": "zepp_robot_" + str(random.randint(100000, 999999))
     }
     try:
