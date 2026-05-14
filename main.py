@@ -31,18 +31,21 @@ def get_time_multiplier():
 
 def login_zepp(account, password):
     print("🔐 正在登录 Zepp...")
-    # 使用最新可用的登录接口
-    url = "https://account.huami.com/v1/client/app_login"
+    # 最新可用的登录接口
+    url = "https://account.zepp.com/v2/client/login"
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Zepp/6.0.0 (Android; Scale/2.00)"
+        "User-Agent": "Zepp/7.0.0 (Android 14; Scale/3.00)",
+        "Accept": "*/*"
     }
     data = {
-        "email": account,
-        "password": password,
-        "app_name": "com.huami.mifit",
         "country_code": "CN",
-        "device_id": "zepp_robot_" + str(random.randint(100000, 999999))
+        "account": account,
+        "password": password,
+        "grant_type": "password",
+        "client_id": "com.huami.mifit",
+        "device_id": "zepp_robot_" + str(random.randint(100000, 999999)),
+        "app_name": "com.huami.mifit"
     }
     try:
         res = requests.post(url, headers=headers, data=data, timeout=30)
@@ -55,7 +58,7 @@ def login_zepp(account, password):
 
 def sync_steps(access_token, steps):
     print(f"📤 正在同步 {steps} 步...")
-    url = "https://api-mifit.huami.com/v1/user/sync"
+    url = "https://api-mifit.zepp.com/v1/user/sync"
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {access_token}"
